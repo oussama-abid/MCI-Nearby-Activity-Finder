@@ -20,3 +20,11 @@
     Dart (242.24931)
     io.flutter (85.2.2)
 
+# STRUKTUR
+    core: Constant, Errors, Theme Global
+    domain: Models, Metier, UseCases
+    presentation: UI, Widgets, state
+    shared: Widgets reutilisables (buttons, cards..)
+    services: API meteo, geolocator, etc.
+    app: Navigation, routes, global theme
+
