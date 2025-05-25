@@ -3,7 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:lottie/lottie.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:mcifrontend/features/main/screens/main_screen.dart'; // Your home page import
+import 'package:mcifrontend/features/main/presentation/pages/main_screen.dart'; // Your home page import
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
