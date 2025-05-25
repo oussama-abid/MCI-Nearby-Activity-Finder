@@ -3,7 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:lottie/lottie.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:mcifrontend/features/home/screens/home_screen.dart'; // Your home page import
+import 'package:mcifrontend/features/main/screens/main_screen.dart'; // Your home page import
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -86,7 +86,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         Future.delayed(const Duration(milliseconds: 2200), () {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (_) => const MyHomePage(title: 'MCI Frontend'),
+           builder: (_) => const MainScreen(),
+
             ),
           );
         });

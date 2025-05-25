@@ -15,12 +15,21 @@ class BottomNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return BottomNavigationBar(
       currentIndex: selectedIndex,
-      onTap: onItemTapped,
+      onTap: (index) {
+        // If you're handling everything inside the same page, this part shouldn't navigate.
+        // Just update the index.
+        onItemTapped(index);
+      },
       selectedItemColor: const Color(0xFF534E4E),
       unselectedItemColor: const Color(0xFFA29B9B),
       selectedLabelStyle: GoogleFonts.montserrat(),
       unselectedLabelStyle: GoogleFonts.montserrat(),
+      type: BottomNavigationBarType.fixed,
       items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home),
+          label: 'Home',
+        ),
         BottomNavigationBarItem(
           icon: Icon(Icons.map),
           label: 'Karte',

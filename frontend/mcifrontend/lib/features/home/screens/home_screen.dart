@@ -1,23 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:mcifrontend/shared/widgets/bottom_nav_bar.dart';
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _selectedIndex = 0;
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+class MyHomePage extends StatelessWidget {
+  const MyHomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -48,10 +33,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 ],
               ),
             ),
-
             const SizedBox(height: 30),
-
-            // Temperature
             Text(
               '19°',
               style: GoogleFonts.montserrat(
@@ -60,10 +42,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 color: const Color(0xFF534E4E),
               ),
             ),
-
             const SizedBox(height: 10),
-
-            // Weather description
             Text(
               'Sonnig',
               style: GoogleFonts.montserrat(
@@ -71,10 +50,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 color: const Color(0xFFA29B9B),
               ),
             ),
-
             const SizedBox(height: 8),
-
-            // City name
             Text(
               'Bremen, Deutschland',
               style: GoogleFonts.montserrat(
@@ -82,10 +58,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 color: Colors.black,
               ),
             ),
-
             const SizedBox(height: 40),
-
-            // Suggestion Button
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: SizedBox(
@@ -93,10 +66,10 @@ class _MyHomePageState extends State<MyHomePage> {
                 height: 60,
                 child: ElevatedButton(
                   onPressed: () {
-                    // TODO: add your action
+                    // TODO: Add your button action here
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0071BC), // Blue
+                    backgroundColor: const Color(0xFF0071BC),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -115,12 +88,6 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ],
         ),
-      ),
-
-      // Bottom navigation bar
-      bottomNavigationBar: BottomNavBar(
-        selectedIndex: _selectedIndex,
-        onItemTapped: _onItemTapped,
       ),
     );
   }
