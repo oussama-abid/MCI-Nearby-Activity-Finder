@@ -3,9 +3,15 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mcifrontend/shared/widgets/tooltip_marker.dart';
 import 'package:mcifrontend/features/home/presentation/pages/activity_detail_page.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+import '../../../../utils/weather_utils.dart';
+import '../../domain/activity_filter.dart';
+import '../widgets/filter_sheet.dart';
 
 double offsetLat(double lat, double offset) => lat + offset;
-double offsetLng(double lng, double offset) => lng + offset;
+double offsetLng(double lon, double offset) => lon + offset;
 
 void main() => runApp(DayventureApp());
 
@@ -67,160 +73,252 @@ class _MainNavigationState extends State<MainNavigation> {
 
 class MapPage extends StatelessWidget {
   final LatLng userLocation = LatLng(53.0793, 8.8017); // Bremen
+  final String currentWeather = 'sunny';
+
+  LatLng getCenter(List<Map<String, dynamic>> activities, LatLng fallback) {
+    if (activities.isEmpty) return fallback;
+
+    final avgLat = activities.map((a) => a['lat'] as num).reduce((a, b) => a + b) / activities.length;
+    final avgLon = activities.map((a) => a['lon'] as num).reduce((a, b) => a + b) / activities.length;
+
+    return LatLng(avgLat.toDouble(), avgLon.toDouble());
+  }
+
+
+  IconData getWeatherIcon(String weather) {
+    switch (weather.toLowerCase()) {
+      case 'clear':
+      case 'sunny':
+        return Icons.wb_sunny;
+      case 'clouds':
+        return Icons.cloud;
+      case 'rain':
+      case 'drizzle':
+        return Icons.umbrella;
+      case 'thunderstorm':
+        return Icons.flash_on;
+      case 'snow':
+        return Icons.ac_unit;
+      case 'mist':
+      case 'fog':
+        return Icons.blur_on;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  IconData getIconForType(String type) {
+    switch (type) {
+      case 'bike':
+        return Icons.directions_bike;
+      case 'hiking':
+        return Icons.hiking;
+      case 'beach':
+        return Icons.beach_access;
+      case 'museum':
+        return Icons.museum;
+      case 'park':
+        return Icons.park;
+      case 'art':
+        return Icons.brush;
+      default:
+        return Icons.place;
+    }
+  }
+
+
+  Future<Map<String, dynamic>> fetchActivities() async {
+    final lat = 53.0793;
+    final lon = 8.8017;
+
+    final response = await http.get(
+      Uri.parse('http://172.31.240.1:3001/api/activities?lat=$lat&lon=$lon'),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return {
+        'weather': data['weather'],
+        'activities': List<Map<String, dynamic>>.from(data['activities']),
+      };
+    } else {
+      throw Exception('Failed to load activities');
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
 
-    final List<Map<String, dynamic>> activities = [
-      {
-        'name': 'Radtour am See',
-        'location': LatLng(offsetLat(userLocation.latitude, 0.012), offsetLng(userLocation.longitude, 0.0080)),
-        'icon': Icons.directions_bike,
-        'duration': '1h 30min',
-        'weather': '23°C, sonnig',
-      },
-      {
-        'name': 'Wanderung am Berg',
-        'location': LatLng(offsetLat(userLocation.latitude, -0.0030), offsetLng(userLocation.longitude, 0.0040)),
-        'icon': Icons.hiking,
-        'duration': '2h',
-        'weather': '21°C, leicht bewölkt',
-      },
-      {
-        'name': 'Strandbesuch',
-        'location': LatLng(offsetLat(userLocation.latitude, -0.01), offsetLng(userLocation.longitude, -0.009)),
-        'icon': Icons.beach_access,
-        'duration': '1h',
-        'weather': '25°C, sonnig',
-      },
-    ];
+    return FutureBuilder(
+      future: fetchActivities(),
+      builder: (context, asyncSnapshot) {
+        if (asyncSnapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        } else if (asyncSnapshot.hasError) {
+          return Center(child: Text('Error: ${asyncSnapshot.error}'));
+        }
 
-    return Stack(
-      children: [
-        FlutterMap(
-          options: MapOptions(
-            center: userLocation,
-            zoom: 14.0,
-          ),
+        final weather = asyncSnapshot.data!['weather'] as String;
+        final activities = asyncSnapshot.data!['activities'] as List<Map<String, dynamic>>;
+
+        final recommendedActivities = activities.where((activity) {
+          return activity != null &&
+              activity['lat'] != null &&
+              activity['lon'] != null &&
+              activity['name'] != null &&
+              activity['type'] != null;
+        }).toList();
+
+        print('Recommended activities (${recommendedActivities.length}): $recommendedActivities');
+
+        return Stack(
           children: [
-            TileLayer(
-              urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              subdomains: ['a', 'b', 'c'],
-            ),
-            MarkerLayer(
-              markers: [
-                Marker(
-                  point: userLocation,
-                  width: 60,
-                  height: 60,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.my_location, size: 28, color: Colors.blue),
-                      SizedBox(height: 2),
-                      Text("ICI", style: TextStyle(fontSize: 10)),
-                    ],
-                  ),
+            FlutterMap(
+              options: MapOptions(
+                center: getCenter(recommendedActivities, userLocation),
+                zoom: 12.7,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  subdomains: ['a', 'b', 'c'],
                 ),
-                ...activities.map((activity) => Marker(
-                  point: activity['location'],
-                  width: 160,
-                  height: 60,
-                  child: GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ActivityDetailPage(
-                            icon: activity['icon'],
-                            title: activity['name'],
-                            location: 'Naturpark Bremen', // ou selon l'activité
-                            weather: activity['weather'],
-                            temperature: activity['weather'].split(',')[0], // ex : Sonnig
-                            duration: activity['duration'],
-                            distance: '4,2 km entfernt', // fictif pour l’instant
-                            userLocation: userLocation,
-                            destinationLocation: activity['location'],
-                          ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: userLocation,
+                      width: 60,
+                      height: 60,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.location_pin, size: 40, color: Colors.blue),
+                          SizedBox(height: 2),
+                          Text("ICI", style: TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                    ...recommendedActivities.map((activity) => Marker(
+                      point: LatLng((activity['lat'] as num).toDouble(), (activity['lon'] as num).toDouble()),
+                      width: 160,
+                      height: 60,
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ActivityDetailPage(
+                                icon: getIconForType(activity['type'] ?? 'default'),
+                                title: activity['name'] ?? 'Nom inconnu',
+                                location: activity['location'] ?? 'Emplacement inconnu',
+                                weather: activity['weather'] ?? 'clear',
+                                temperature: (activity['weather'] ?? 'clear').split(',')[0],
+                                duration: activity['duration'] ?? '1h',
+                                distance: '4,2 km entfernt',
+                                userLocation: userLocation,
+                                destinationLocation: LatLng(
+                                  (activity['lat'] as num).toDouble(),
+                                  (activity['lon'] as num).toDouble(),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        child: TooltipMarker(
+                          icon: getIconForType(activity['type']),
+                          label: activity['name'],
+                          color: Colors.green[700]!,
+                        ),
+                      ),
+                    )),
+                  ],
+                ),
+              ],
+            ),
+        
+            // Boutons flottants (Filter + Start)
+            Positioned(
+              top: 50,
+              left: 16,
+              right: 16,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final result = await showModalBottomSheet<ActivityFilter>(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.white,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                        ),
+                        builder: (context) => Padding(
+                          padding: MediaQuery.of(context).viewInsets,
+                          child: FilterSheet(initialFilter: ActivityFilter()),
                         ),
                       );
+
+                      if (result != null) {
+                        // TODO: Appliquer les filtres à ton activité
+                        print("Filtre appliqué : ${result.toString()}");
+                      }
                     },
-                    child: TooltipMarker(
-                      icon: activity['icon'],
-                      label: activity['name'],
-                      color: Colors.green[700]!,
+                    icon: Icon(Icons.filter_alt),
+                    label: Text("Filter"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      elevation: 3,
                     ),
                   ),
-                )),
-              ],
-            ),
-          ],
-        ),
-
-        // Boutons flottants (Filter + Start)
-        Positioned(
-          top: 50,
-          left: 16,
-          right: 16,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              ElevatedButton.icon(
-                onPressed: () {
-                  // TODO: implémenter le filtre
-                },
-                icon: Icon(Icons.filter_alt),
-                label: Text("Filter"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  elevation: 3,
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  // TODO: implémenter la recherche ou les suggestions
-                },
-                child: Text("Start"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  elevation: 3,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Badge météo en bas à gauche
-        Positioned(
-          bottom: 20,
-          left: 16,
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.wb_sunny, color: Colors.orange, size: 24),
-                SizedBox(width: 8),
-                Text(
-                  "Sonnig, 19°C",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                  ElevatedButton(
+                    onPressed: () {
+                      // TODO: implémenter la recherche ou les suggestions
+                    },
+                    child: Text("Start"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      elevation: 3,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ),
-
-      ],
+        
+            // Badge météo en bas à gauche
+            Positioned(
+              bottom: 20,
+              left: 16,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(getWeatherIcon(weather), color: Colors.orange, size: 24),
+                    SizedBox(width: 8),
+                    Text(
+                      '${translateWeather(weather, locale: 'de')} – Bremen',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        
+          ],
+        );
+      }
     );
 
   }

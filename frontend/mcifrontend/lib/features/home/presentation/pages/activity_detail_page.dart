@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:mcifrontend/utils/weather_utils.dart';
 
 class ActivityDetailPage extends StatelessWidget {
   final IconData icon;
@@ -28,6 +29,7 @@ class ActivityDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -82,11 +84,14 @@ class ActivityDetailPage extends StatelessWidget {
                   Positioned(
                     top: 16,
                     left: 16,
-                    child: CircleAvatar(
-                      backgroundColor: Colors.white,
-                      child: IconButton(
-                        icon: Icon(Icons.arrow_back, color: Colors.black),
-                        onPressed: () => Navigator.pop(context),
+                    child: Hero(
+                      tag: 'icon-$title',
+                      child: CircleAvatar(
+                        backgroundColor: Colors.white,
+                        child: IconButton(
+                          icon: Icon(Icons.arrow_back, color: Colors.black),
+                          onPressed: () => Navigator.pop(context),
+                        ),
                       ),
                     ),
                   ),
@@ -128,7 +133,7 @@ class ActivityDetailPage extends StatelessWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
-                              Text(weather),
+                              Text(translateWeather(weather, locale: 'de')),
                               Text(temperature),
                               Text(duration),
                             ],
