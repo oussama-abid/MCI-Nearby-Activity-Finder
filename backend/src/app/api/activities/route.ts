@@ -1,22 +1,10 @@
 // /app/api/activities/route.ts
 
 import { NextResponse } from 'next/server'
+import { getMockActivities } from '@/app/lib/mockData'
 
 const WEATHER_API = 'https://api.openweathermap.org/data/2.5/weather'
-const TRIPMAP_API = 'https://api.opentripmap.com/0.1/en/places/radius'
 const WEATHER_KEY = process.env.OPENWEATHER_API_KEY
-const TRIPMAP_KEY = 'REMOVED'
-
-type Feature = {
-    properties: {
-        xid: string
-        name: string
-        kinds: string
-    }
-    geometry: {
-        coordinates: [number, number] // [lon, lat]
-    }
-}
 
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
@@ -34,24 +22,12 @@ export async function GET(req: Request) {
     const weatherData = await weatherRes.json()
     const weather = weatherData.weather?.[0]?.main ?? 'Clear'
 
-    // 2. Déduire un filtre d’activité (ex: s’il pleut => éviter outdoor)
-    const isRainy = ['Rain', 'Thunderstorm', 'Drizzle'].includes(weather)
-    const kinds = isRainy ? 'cultural,museums,interesting_places' : 'natural,parks,foods'
+    // 2. Récupérer les activités simulées en fonction de la météo
+    const activities = getMockActivities(weather)
 
-    // 3. Obtenir les lieux
-    const tripRes = await fetch(
-        `${TRIPMAP_API}?radius=2000&lon=${lon}&lat=${lat}&limit=10&kinds=${kinds}&apikey=${TRIPMAP_KEY}`
-    )
-    const tripData = await tripRes.json()
-
+    // 3. Retour JSON final
     return NextResponse.json({
         weather,
-        activities: tripData.features?.map((f: Feature) => ({
-            id: f.properties.xid,
-            name: f.properties.name,
-            type: f.properties.kinds,
-            lat: f.geometry.coordinates[1],
-            lon: f.geometry.coordinates[0],
-        })),
+        activities,
     })
 }
