@@ -1,5 +1,8 @@
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 require('dotenv').config();
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const axios = require('axios');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
@@ -55,12 +58,11 @@ async function fetchAndInsert() {
             duration: '1h', // optionnel, fixe ou randomisable
         }));
 
-        const { data, error } = await supabase.from('activities').insert(prepared);
+        const {error } = await supabase.from('activities').insert(prepared);
         if (error) throw error;
 
-        console.log(`✅ ${prepared.length} activités insérées.`);
     } catch (e) {
-        console.error('❌ Erreur :', e.message);
+        console.error('Erreur :', e.message);
     }
 }
 
