@@ -17,7 +17,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: 'Missing lat or lon' }, { status: 400 })
     }
 
-    // 🔹 Lecture des filtres
+    // Lecture des filtres
     const accessibleParam = searchParams.get('accessible')
     const accessible = accessibleParam === 'true' ? true : accessibleParam === 'false' ? false : undefined
 
@@ -25,10 +25,10 @@ export async function GET(req: Request) {
     const interests = searchParams.get('interests')?.split(',') ?? []
     const radius = parseFloat(searchParams.get('radius') ?? '100')
 
-    // 🔹 Favoris utilisateur (mock)
+    // Favoris utilisateur (mock)
     const userFavorites = ['default1']
 
-    // 🔹 1. Météo
+    // 1. Météo
     const weatherRes = await fetch(
         `${WEATHER_API}?lat=${lat}&lon=${lon}&appid=${WEATHER_KEY}&units=metric`
     )
@@ -36,10 +36,10 @@ export async function GET(req: Request) {
     const weather   = weatherData.weather?.[0]?.main ?? 'Clear'
     const weatherDescription = weatherData.weather?.[0]?.description ?? 'klar'
 
-    // 🔹 2. Activités selon la météo
+    // 2. Activités selon la météo
     let activities = getMockActivities(weather )
 
-    // 🔹 3. Filtrage
+    // 3. Filtrage
     activities = activities.filter(act => {
         if (accessible !== undefined && act.accessible !== accessible) return false
         if (favoritesOnly && !userFavorites.includes(act.id)) return false
@@ -55,7 +55,7 @@ export async function GET(req: Request) {
         return true
     })
 
-    // 🔹 4. Réponse finale
+    // 4. Réponse finale
     return NextResponse.json({
         weather,
         weatherDescription,
