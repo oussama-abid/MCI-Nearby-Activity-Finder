@@ -71,8 +71,19 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 }
 
-class MapPage extends StatelessWidget {
-  final LatLng userLocation = LatLng(53.0793, 8.8017); // Bremen
+List<String> userFavorites = [];
+List<String> visitedActivityIds = [];
+
+class MapPage extends StatefulWidget {
+
+  @override
+  State<MapPage> createState() => _MapPageState();
+}
+
+class _MapPageState extends State<MapPage> {
+  final LatLng userLocation = LatLng(53.0793, 8.8017);
+  ActivityFilter currentFilter = ActivityFilter();
+ // Bremen
   final String currentWeather = 'sunny';
 
   LatLng getCenter(List<Map<String, dynamic>> activities, LatLng fallback) {
@@ -83,7 +94,6 @@ class MapPage extends StatelessWidget {
 
     return LatLng(avgLat.toDouble(), avgLon.toDouble());
   }
-
 
   IconData getWeatherIcon(String weather) {
     switch (weather.toLowerCase()) {
@@ -126,19 +136,28 @@ class MapPage extends StatelessWidget {
     }
   }
 
+  Future<Map<String, dynamic>> fetchActivities({ActivityFilter? filter}) async {
+    final lat = userLocation.latitude;
+    final lon = userLocation.longitude;
 
-  Future<Map<String, dynamic>> fetchActivities() async {
-    final lat = 53.0793;
-    final lon = 8.8017;
+    final uri = Uri.http('172.31.240.1:3001', '/api/activities', {
+      'lat': '$lat',
+      'lon': '$lon',
+      if (filter != null) ...{
+        if (filter.accessibleOnly) 'accessible': 'true',
+        if (filter.favoritesOnly) 'favoritesOnly': 'true',
+        if (filter.radiusKm < 100) 'radius': filter.radiusKm.toString(),
+        if (filter.interests.isNotEmpty) 'interests': filter.interests.join(','),
+      }
+    });
 
-    final response = await http.get(
-      Uri.parse('http://172.31.240.1:3001/api/activities?lat=$lat&lon=$lon'),
-    );
+    final response = await http.get(uri);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return {
         'weather': data['weather'],
+        'weatherDescription': data['weatherDescription'],
         'activities': List<Map<String, dynamic>>.from(data['activities']),
       };
     } else {
@@ -146,12 +165,11 @@ class MapPage extends StatelessWidget {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
 
     return FutureBuilder(
-      future: fetchActivities(),
+      future: fetchActivities(filter: currentFilter),
       builder: (context, asyncSnapshot) {
         if (asyncSnapshot.connectionState == ConnectionState.waiting) {
           return Center(child: CircularProgressIndicator());
@@ -160,7 +178,48 @@ class MapPage extends StatelessWidget {
         }
 
         final weather = asyncSnapshot.data!['weather'] as String;
+
+        print("-----------------------");
+        print(asyncSnapshot.data?['weatherDescription']);
+        final weatherDescription = asyncSnapshot.data?['weatherDescription'] ?? 'klar';
+
         final activities = asyncSnapshot.data!['activities'] as List<Map<String, dynamic>>;
+
+        final Distance distanceCalc = Distance();
+
+        final filteredActivities = activities.where((activity) {
+          // Check type (interest)
+          if (currentFilter.interests.isNotEmpty && !currentFilter.interests.contains(activity['type'])) {
+            return false;
+          }
+
+          // Accessible only
+          if (currentFilter.accessibleOnly && activity['accessible'] != true) {
+            return false;
+          }
+
+          // Favorites only
+          if (currentFilter.favoritesOnly && !(userFavorites.contains(activity['id']))) {
+            return false;
+          }
+
+          // Show only within radius
+          if (currentFilter.radiusKm < 100) {
+            final dist = distanceCalc.as(
+                LengthUnit.Kilometer,
+                userLocation,
+                LatLng(activity['lat'], activity['lon'])
+            );
+            if (dist > currentFilter.radiusKm) return false;
+          }
+
+          // Show visited?
+          if (!currentFilter.showVisited && visitedActivityIds.contains(activity['id'])) {
+            return false;
+          }
+
+          return true;
+        }).toList();
 
         final recommendedActivities = activities.where((activity) {
           return activity != null &&
@@ -176,7 +235,7 @@ class MapPage extends StatelessWidget {
           children: [
             FlutterMap(
               options: MapOptions(
-                center: getCenter(recommendedActivities, userLocation),
+                center: getCenter(filteredActivities, userLocation),
                 zoom: 12.7,
               ),
               children: [
@@ -199,7 +258,7 @@ class MapPage extends StatelessWidget {
                         ],
                       ),
                     ),
-                    ...recommendedActivities.map((activity) => Marker(
+                    ...filteredActivities.map((activity) => Marker(
                       point: LatLng((activity['lat'] as num).toDouble(), (activity['lon'] as num).toDouble()),
                       width: 160,
                       height: 60,
@@ -236,7 +295,7 @@ class MapPage extends StatelessWidget {
                 ),
               ],
             ),
-        
+
             // Boutons flottants (Filter + Start)
             Positioned(
               top: 50,
@@ -256,13 +315,14 @@ class MapPage extends StatelessWidget {
                         ),
                         builder: (context) => Padding(
                           padding: MediaQuery.of(context).viewInsets,
-                          child: FilterSheet(initialFilter: ActivityFilter()),
+                          child: FilterSheet(initialFilter: currentFilter),
                         ),
                       );
 
                       if (result != null) {
-                        // TODO: Appliquer les filtres à ton activité
-                        print("Filtre appliqué : ${result.toString()}");
+                        setState(() {
+                          currentFilter = result;
+                        });
                       }
                     },
                     icon: Icon(Icons.filter_alt),
@@ -287,7 +347,7 @@ class MapPage extends StatelessWidget {
                 ],
               ),
             ),
-        
+
             // Badge météo en bas à gauche
             Positioned(
               bottom: 20,
@@ -305,7 +365,7 @@ class MapPage extends StatelessWidget {
                     Icon(getWeatherIcon(weather), color: Colors.orange, size: 24),
                     SizedBox(width: 8),
                     Text(
-                      '${translateWeather(weather, locale: 'de')} – Bremen',
+                      '${translateWeather(weatherDescription, locale: 'de')} – Bremen',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -315,7 +375,7 @@ class MapPage extends StatelessWidget {
                 ),
               ),
             ),
-        
+
           ],
         );
       }
