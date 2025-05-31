@@ -18,6 +18,8 @@ export function getMockActivities(weather: string) {
                     lat: 53.0856,
                     lon: 8.8215,
                     distance: '3,8km',
+                    accessible: true,
+                    favorite: true,
                     ...commonFields
                 },
                 {
@@ -27,6 +29,8 @@ export function getMockActivities(weather: string) {
                     lat: 53.0950,
                     lon: 8.8000,
                     distance: '4,7km',
+                    accessible: false,
+                    favorite: false,
                     ...commonFields
                 },
                 {
@@ -36,6 +40,8 @@ export function getMockActivities(weather: string) {
                     lat: 53.1040,
                     lon: 8.8420,
                     distance: '3,1km',
+                    accessible: true,
+                    favorite: false,
                     ...commonFields
                 },
             ]
@@ -51,6 +57,8 @@ export function getMockActivities(weather: string) {
                     lat: 53.0831,
                     lon: 8.8147,
                     distance: '2km',
+                    accessible: true,
+                    favorite: false,
                     ...commonFields
                 },
                 {
@@ -60,6 +68,8 @@ export function getMockActivities(weather: string) {
                     lat: 53.0779,
                     lon: 8.8199,
                     distance: '3,5km',
+                    accessible: true,
+                    favorite: true,
                     ...commonFields
                 },
             ]
@@ -73,6 +83,8 @@ export function getMockActivities(weather: string) {
                     lat: 53.1012,
                     lon: 8.8721,
                     distance: '4,2km',
+                    accessible: false,
+                    favorite: false,
                     ...commonFields
                 },
                 {
@@ -82,6 +94,8 @@ export function getMockActivities(weather: string) {
                     lat: 53.0771,
                     lon: 8.8073,
                     distance: '3km',
+                    accessible: false,
+                    favorite: true,
                     ...commonFields
                 },
             ]
@@ -95,6 +109,8 @@ export function getMockActivities(weather: string) {
                     lat: 53.0650,
                     lon: 8.7900,
                     distance: '2,4km',
+                    accessible: true,
+                    favorite: true,
                     ...commonFields
                 },
                 {
@@ -104,6 +120,8 @@ export function getMockActivities(weather: string) {
                     lat: 53.1050,
                     lon: 8.8550,
                     distance: '1,7km',
+                    accessible: false,
+                    favorite: false,
                     ...commonFields
                 },
             ]
