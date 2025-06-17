@@ -5,6 +5,7 @@ export function getMockActivities(weather: string) {
         location: 'Bremen',
         weather,
         duration: '1Std',
+        imageUrl: "https://images.unsplash.com/photo-1748096728390-0c0f12834975?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     };
     switch (weather) {
         case 'Clear':
