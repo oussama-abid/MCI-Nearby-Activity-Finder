@@ -1,17 +1,13 @@
-import { supabase } from "../../app/lib/supabaseClient";
+require('dotenv').config();
 
-export default async function handler(req, res) {
-    const { error } = await supabase.from('activities').insert([
-        {
-            name: 'Strandbesuch',
-            type: 'beach',
-            lat: 53.09,
-            lng: 8.81,
-            duration: '1h',
-            weather_tag: 'sunny',
-        },
-    ]);
+const { fetchAndInsert } = require('../../app/lib/fetchAndInsertCore');
 
-    if (error) return res.status(500).json({ error: error.message });
-    res.status(200).json({ status: 'ok' });
-}
+(async () => {
+    console.log("✅ SUPABASE_URL =", process.env.SUPABASE_URL); // debug
+    await fetchAndInsert({
+        lat: 53.0793,
+        lon: 8.8017,
+        radius: 10000,
+        limit: 50
+    });
+})();

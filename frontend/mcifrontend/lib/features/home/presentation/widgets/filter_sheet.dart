@@ -14,12 +14,34 @@ class FilterSheet extends StatefulWidget {
 
 class _FilterSheetState extends State<FilterSheet> {
   late ActivityFilter filter;
+  late TextEditingController peopleController;
+  late TextEditingController childrenController;
+  late TextEditingController ageController;
+  final interestOptions = {
+    'Natur': 'natural',
+    'Museen': 'museum',
+    'Spiele': 'playground',
+    'Kultur': 'cultural',
+    'Historisch': 'historic',
+  };
 
   @override
   void initState() {
     super.initState();
     filter = widget.initialFilter;
+    peopleController = TextEditingController(text: filter.peopleCount.toString());
+    childrenController = TextEditingController(text: filter.childrenCount.toString());
+    ageController = TextEditingController(text: filter.childAge.toString());
   }
+
+  @override
+  void dispose() {
+    peopleController.dispose();
+    childrenController.dispose();
+    ageController.dispose();
+    super.dispose();
+  }
+
   void updateFilter(ActivityFilter updated) {
     setState(() {
       filter = updated;
@@ -36,24 +58,33 @@ class _FilterSheetState extends State<FilterSheet> {
           const Text("Filteroptionen", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
 
-          _buildNumberField('Anzahl Personen', filter.peopleCount, (v) {
-            updateFilter(filter..peopleCount = v);
-          }),
-          _buildNumberField('Anzahl der Kinder', filter.childrenCount, (v) {
-            updateFilter(filter..childrenCount = v);
-          }),
-          _buildNumberField('Alter von Kind 1', filter.childAge, (v) {
-            updateFilter(filter..childAge = v);
-          }),
-          _buildDropdown('Interessen', filter.interests, ['Natur', 'Museen', 'Spiele'], (value) {
-            updateFilter(filter..interests = [value]);
-          }),
+          _buildNumberField('Anzahl Personen', peopleController),
+          _buildNumberField('Anzahl der Kinder', childrenController),
+          _buildNumberField('Alter von Kind 1', ageController),
+
+          _buildDropdown(
+              'Interessen',
+              interestOptions.entries
+                  .firstWhere(
+                    (e) => e.value == filter.interests.firstOrNull,
+                orElse: () => const MapEntry('Unbekannt', ''),
+              )
+                  .key,
+              interestOptions.keys.toList(),
+                  (selectedLabel) {
+                final backendTag = interestOptions[selectedLabel]!;
+                updateFilter(filter..interests = [backendTag]);
+              }
+          ),
+
           _buildSlider('Radius (km)', filter.radiusKm, 5, 100, (v) {
             updateFilter(filter..radiusKm = v);
           }),
+
           _buildRatingStars('Popularität', filter.popularity, (v) {
             updateFilter(filter..popularity = v);
           }),
+
           _buildSwitch('Auf das Wetter achten', filter.considerWeather, (v) {
             updateFilter(filter..considerWeather = v);
           }),
@@ -66,6 +97,7 @@ class _FilterSheetState extends State<FilterSheet> {
           _buildSwitch('Bereits besuchte Orte anzeigen', filter.showVisited, (v) {
             updateFilter(filter..showVisited = v);
           }),
+
           _buildDropdown('Umgebung', filter.environment, ['Stadt', 'Land', 'See'], (value) {
             updateFilter(filter..environment = value);
           }),
@@ -73,6 +105,10 @@ class _FilterSheetState extends State<FilterSheet> {
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: () {
+              filter.peopleCount = int.tryParse(peopleController.text) ?? 1;
+              filter.childrenCount = int.tryParse(childrenController.text) ?? 0;
+              filter.childAge = int.tryParse(ageController.text) ?? 0;
+
               Navigator.pop(context, filter);
             },
             child: const Text("Anwenden"),
@@ -83,15 +119,11 @@ class _FilterSheetState extends State<FilterSheet> {
   }
 }
 
-Widget _buildNumberField(String label, int value, Function(int) onChanged) {
+Widget _buildNumberField(String label, TextEditingController controller) {
   return TextFormField(
-    initialValue: value.toString(),
+    controller: controller,
     decoration: InputDecoration(labelText: label),
     keyboardType: TextInputType.number,
-    onChanged: (v) {
-      final parsed = int.tryParse(v);
-      if (parsed != null) onChanged(parsed);
-    },
   );
 }
 

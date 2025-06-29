@@ -2,7 +2,7 @@ name: mcifrontend
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: "none" # Remove this line if you wish to publish to pub.dev
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -30,40 +30,31 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_map: ^6.2.0
+  flutter_map: ^6.1.0
+  flutter_localizations:
+    sdk: flutter
+  flutter_map_marker_cluster: ^1.1.1
+  geolocator: ^10.0.1
   latlong2: ^0.9.1
   http: ^1.2.1
+  lucide_icons: ^0.257.0
+  device_info_plus: ^9.0.3
+  url_launcher: ^6.2.1
+  shared_preferences: ^2.2.2
+  uuid: ^4.3.1
+  google_fonts: ^6.2.1
+  intl: any
+  supabase_flutter: ^1.10.17
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  google_fonts: ^6.1.0
-  flutter_svg: ^2.0.7
+
   cupertino_icons: ^1.0.8
-  lottie: ^2.3.2
-  animated_splash_screen: 
-
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^5.0.0
 
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
-
-# The following section is specific to Flutter packages.
 flutter:
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
+  generate: true
   uses-material-design: true
-  assets:
-    - assets/animation/
-
-
