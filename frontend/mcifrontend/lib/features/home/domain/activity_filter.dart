@@ -16,7 +16,7 @@ class ActivityFilter {
     this.childrenCount = 0,
     this.childAge = 0,
     this.interests = const [],
-    this.radiusKm = 50,
+    this.radiusKm = 25,
     this.popularity = 0,
     this.considerWeather = false,
     this.accessibleOnly = false,

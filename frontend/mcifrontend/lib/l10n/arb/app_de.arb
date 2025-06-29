@@ -1,0 +1,20 @@
+{
+  "@@locale": "de",
+  "home_title": "Zählen",
+  "home_fab_tooltip": "Erhöhen",
+  "settings_title": "Einstellungen",
+  "settings_switch_mode": "Dunkelmodus",
+  "settings_text_name": "Name",
+  "settings_text_name_hint_text": "Gib deinen Namen ein",
+  "settings_language": "Sprache",
+  "settings_font": "Schriftart",
+  "settings_favorites": "Favoriten",
+  "settings_blacklist": "Blacklist",
+  "settings_about_text": "Reise-App zur spontanen Ausflugsplanung basierend auf Wetter & Interessen.",
+  "settings_language_changed": "Sprache aktualisiert",
+  "settings_reset": "Zurücksetzen",
+  "settings_reset_done": "Alle Einstellungen wurden zurückgesetzt",
+  "map": "Karte",
+  "favourites": "Favoriten",
+  "settings": "Einstellungen"
+}

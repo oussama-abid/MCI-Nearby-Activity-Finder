@@ -10,10 +10,6 @@ const supabase = createClient(
     process.env.SUPABASE_ANON_KEY
 );
 
-const LAT = 53.0793;
-const LON = 8.8017;
-const RADIUS = 5000;
-const LIMIT = 30; // tu peux augmenter si tu veux plus de lieux
 const OT_API_KEY = process.env.OPENTRIPMAP_API_KEY;
 const OW_API_KEY = process.env.OPENWEATHER_API_KEY;
 
@@ -25,10 +21,10 @@ const TAGS_EXCLUS = [
 ];
 
 const images = {
-    hiking: "https://images.unsplash.com/photo-1472396961693-142e6e269027?q=80&w=2152&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    hiking: "https://images.unsplash.com/photo-1472396961693-142e6e269027?q=80&w=2152&auto=format&fit=crop&ixlib=rb-4.1.0",
     bike: "https://images.unsplash.com/photo-1509395176047-4a66953fd231",
-    museum: "https://images.unsplash.com/photo-1492305175278-3b3afaa2f31f?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1yZWxhdGVkfDF8fHxlbnwwfHx8fHw%3D",
-    historic: "https://images.unsplash.com/photo-1501028725025-d36415ffe456?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    museum: "https://images.unsplash.com/photo-1492305175278-3b3afaa2f31f?w=600&auto=format&fit=crop&q=60",
+    historic: "https://images.unsplash.com/photo-1501028725025-d36415ffe456?q=80&w=2070&auto=format&fit=crop",
     beach: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e",
     generic: "https://images.unsplash.com/photo-1503264116251-35a269479413"
 };
@@ -50,10 +46,10 @@ function detectWeatherTag(tags) {
     return 'any';
 }
 
-async function fetchAndInsert() {
+async function fetchAndInsert({ lat, lon, radius = 5000, limit = 30 } = {}) {
     try {
         const weatherRes = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
-            params: { lat: LAT, lon: LON, appid: OW_API_KEY }
+            params: { lat, lon, appid: OW_API_KEY }
         });
         const currentWeather = weatherRes.data.weather[0].main;
         console.log(`🌤 Météo actuelle : ${currentWeather}`);
@@ -61,11 +57,11 @@ async function fetchAndInsert() {
         const res = await axios.get('https://api.opentripmap.com/0.1/en/places/radius', {
             params: {
                 apikey: OT_API_KEY,
-                lat: LAT,
-                lon: LON,
-                radius: RADIUS,
+                lat,
+                lon,
+                radius,
                 format: 'json',
-                limit: LIMIT,
+                limit
             }
         });
 
@@ -74,7 +70,6 @@ async function fetchAndInsert() {
         const filtered = rawPlaces.filter(place => {
             const tags = place.kinds?.toLowerCase().split(',') || [];
             const name = place.name?.toLowerCase() || '';
-
             const nomNonTouristique = /bank|sparkasse|finanz|plaque|memorial|zentrum|business|gmbh|office/.test(name);
 
             return (
@@ -97,24 +92,23 @@ async function fetchAndInsert() {
                 });
 
                 const detail = detailRes.data;
-
                 const tags = place.kinds.toLowerCase().split(',');
                 const type = detectType(tags);
                 const weather_tag = detectWeatherTag(tags);
 
-                if (!detail.point || !detail.point.lat || !detail.point.lon) {
-                    console.warn(`Lieu sans coordonnées valides: ${place.name}`);
+                if (!detail.point?.lat || !detail.point?.lon) {
+                    console.warn(`❌ Lieu sans coordonnées valides: ${place.name}`);
                     continue;
                 }
 
                 const coordKey = `${detail.point.lat},${detail.point.lon}`;
                 if (coordSet.has(coordKey)) {
-                    console.log(`Doublon ignoré: ${detail.name}`);
+                    console.log(`ℹ️ Doublon ignoré: ${detail.name}`);
                     continue;
                 }
                 coordSet.add(coordKey);
 
-                const imageUrl = detail.preview?.source || `${images[type] || images['generic']}`;
+                const imageUrl = detail.preview?.source || images[type] || images['generic'];
 
                 prepared.push({
                     name: detail.name || 'Unbenannter Ort',
@@ -126,21 +120,25 @@ async function fetchAndInsert() {
                     image_url: imageUrl
                 });
 
-                console.log(`${detail.name} ajouté (${detail.point.lat}, ${detail.point.lon})`);
-
-            } catch (detailError) {
-                console.warn(`Erreur lors du fetch de ${place.name}: ${detailError.message}`);
+                console.log(`✅ Ajout: ${detail.name} (${detail.point.lat}, ${detail.point.lon})`);
+            } catch (err) {
+                console.warn(`⚠️ Erreur pour ${place.name}: ${err.message}`);
             }
         }
 
-        await supabase.from('activities').delete().neq('id', 0);
-        const { error } = await supabase.from('activities').insert(prepared);
+        const { error } = await supabase
+            .from('activities')
+            .upsert(prepared, {
+                onConflict: ['name', 'lat', 'lng']
+            });
+
         if (error) throw error;
 
-        console.log(`\n ${prepared.length} activités insérées dans Supabase.\n`);
+        console.log(`🎉 ${prepared.length} activités insérées ou mises à jour.\n`);
     } catch (e) {
-        console.error('Erreur principale :', e.message);
+        console.error('❌ Erreur principale :', e.message);
     }
 }
 
-fetchAndInsert();
+// Appelle ici pour une ville spécifique (ex. Hamburg)
+fetchAndInsert({ lat: 53.5511, lon: 9.9937, radius: 6000, limit: 40 });
