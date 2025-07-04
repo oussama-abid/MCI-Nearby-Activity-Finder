@@ -84,7 +84,7 @@ export default async function handler(req, res) {
             query = query.contains("user_favorites", [userId]);
         }
         if (!showVisited && userId) {
-            query = query.not("visited_by", "cs", `[\"${userId}\"]`);
+            query = query.not("visited_by", "cs", `{${userId}}`);
         }
 
         if (childrenCount > 0 && childAge < 10) {
