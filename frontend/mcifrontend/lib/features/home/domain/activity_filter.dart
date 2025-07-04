@@ -24,4 +24,21 @@ class ActivityFilter {
     this.showVisited = false,
     this.environment = 'Stadt',
   });
+
+  @override
+  String toString() {
+    return 'ActivityFilter('
+        'peopleCount: $peopleCount, '
+        'childrenCount: $childrenCount, '
+        'childAge: $childAge, '
+        'interests: $interests, '
+        'radiusKm: $radiusKm, '
+        'popularity: $popularity, '
+        'considerWeather: $considerWeather, '
+        'accessibleOnly: $accessibleOnly, '
+        'favoritesOnly: $favoritesOnly, '
+        'showVisited: $showVisited, '
+        'environment: $environment'
+        ')';
+  }
 }
