@@ -103,7 +103,7 @@ class _MapPageState extends State<MapPage> {
     final lng = _currentCenter.longitude;
 
     final uri = buildFilteredUri(
-      baseUrl: '10.0.2.2',
+      baseUrl: '192.168.80.1:3000',
       endpoint: '/api/activities',
       filter: currentFilter,
       location: _currentCenter,

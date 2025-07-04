@@ -1,10 +1,13 @@
-require('dotenv').config();
-const axios = require('axios');
-const { createClient } = require('@supabase/supabase-js');
+import 'dotenv/config';
+import axios from 'axios';
+import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const OT_API_KEY = process.env.OPENTRIPMAP_API_KEY;
 const OW_API_KEY = process.env.OPENWEATHER_API_KEY;
+
+
+
 
 const TYPES_AUTORISES = ['natural', 'cultural', 'historic', 'architecture', 'sport', 'museum', 'park', 'monuments'];
 const TAGS_EXCLUS = [
@@ -240,4 +243,4 @@ async function fetchAndInsert({ lat, lon, radius = 5000, limit = 30 } = {}) {
     }
 }
 
-module.exports = { fetchAndInsert };
+export { fetchAndInsert };

@@ -1,5 +1,5 @@
 import { supabase } from "../../app/lib/supabaseClient";
-const { fetchAndInsert } = require("../../app/lib/fetchAndInsertCore");
+import { fetchAndInsert } from "../../app/lib/fetchAndInsertCore";
 
 function mapWeatherToTag(main) {
     switch (main.toLowerCase()) {
@@ -35,6 +35,17 @@ function toRad(value) {
 }
 
 export default async function handler(req, res) {
+    // Add CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+
     try {
         const lat = parseFloat(req.query.lat);
         const lng = parseFloat(req.query.lng);
@@ -43,7 +54,6 @@ export default async function handler(req, res) {
         const weatherRaw = req.query.weather || "any";
         const weather = mapWeatherToTag(weatherRaw);
 
-        const peopleCount = parseInt(req.query.peopleCount || '1');
         const childrenCount = parseInt(req.query.childrenCount || '0');
         const childAge = parseInt(req.query.childAge || '0');
         const popularity = parseInt(req.query.popularity || '0');

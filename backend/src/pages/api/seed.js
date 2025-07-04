@@ -1,6 +1,6 @@
-require('dotenv').config();
+import 'dotenv/config';
 
-const { fetchAndInsert } = require('../../app/lib/fetchAndInsertCore');
+import { fetchAndInsert } from '../../app/lib/fetchAndInsertCore';
 
 (async () => {
     console.log("✅ SUPABASE_URL =", process.env.SUPABASE_URL); // debug
