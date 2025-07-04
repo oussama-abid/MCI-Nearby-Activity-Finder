@@ -54,7 +54,9 @@ class _MapPageState extends State<MapPage> {
       final data = await fetchActivities();
       setState(() {
         _loading = false;
-        _activities = data['activities'] as List<Map<String, dynamic>>;
+        _activities = (data['activities'] as List)
+            .map<Map<String, dynamic>>((item) => Map<String, dynamic>.from(item))
+            .toList();
       });
       return data;
     } catch (e) {
@@ -101,7 +103,7 @@ class _MapPageState extends State<MapPage> {
     final lng = _currentCenter.longitude;
 
     final uri = buildFilteredUri(
-      baseUrl: '192.168.56.1:3000',
+      baseUrl: '10.0.2.2',
       endpoint: '/api/activities',
       filter: currentFilter,
       location: _currentCenter,
@@ -109,12 +111,14 @@ class _MapPageState extends State<MapPage> {
       userId: userId,
     );
     print('📡 URI appelée : $uri');
-    print(currentFilter);
+    print(currentFilter.toString());
     final response = await http.get(uri);
     if (response.statusCode == 200) {
       try {
         final data = jsonDecode(response.body);
-        final activities = List<Map<String, dynamic>>.from(data['activities']);
+        final activities = (data['activities'] as List)
+            .map<Map<String, dynamic>>((item) => Map<String, dynamic>.from(item))
+            .toList();
         filteredActivitiesGlobal = activities;
         weatherDescription = data['weatherDescription'] ?? '';
         return {
