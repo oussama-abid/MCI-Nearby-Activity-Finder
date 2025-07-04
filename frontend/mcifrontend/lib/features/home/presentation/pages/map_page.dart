@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:mcifrontend/features/home/domain/activity_filter.dart';
 import 'package:mcifrontend/features/home/presentation/widgets/filter_sheet.dart';
-
 import '../../../../utils/api_utils.dart';
 import 'activity_detail_page.dart';
 import '../../../../utils/user_id_helper.dart';
@@ -134,6 +133,29 @@ class _MapPageState extends State<MapPage> {
     }
   }
 
+  // Method to navigate to activity detail page
+  void _navigateToActivityDetail(Map<String, dynamic> activity) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ActivityDetailPage(
+          icon: Icons.place,
+          title: activity['name'] ?? '',
+          location: activity['address'] ?? '',
+          weather: weatherDescription,
+          temperature: activity['temperature'] ?? '–',
+          duration: activity['duration'] ?? '–',
+          distance: activity['distance'] ?? '–',
+          userLocation: LatLng(53.0793, 8.8017), // TODO: remplace par vraie position GPS
+          destinationLocation: LatLng(activity['lat'], activity['lng']),
+          openingHours: activity['openingHours'],
+          website: activity['website'],
+          contact: activity['contact'],
+          wikipedia: activity['wikipedia'],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -149,6 +171,9 @@ class _MapPageState extends State<MapPage> {
                 maxZoom: 18,
                 minZoom: 3,
                 interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+                onTap: (tapPosition, point) {
+                  // Handle map tap to close any open popups if needed
+                },
               ),
               children: [
                 TileLayer(
@@ -159,25 +184,49 @@ class _MapPageState extends State<MapPage> {
                     options: MarkerClusterLayerOptions(
                       maxClusterRadius: 45,
                       size: const Size(40, 40),
-                      markers: _activities.map((item) {
+                      markers: _activities.map((activity) {
                         return Marker(
                           width: 40,
                           height: 40,
-                          point: LatLng(item['lat'], item['lng']),
-                          child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+                          point: LatLng(activity['lat'], activity['lng']),
+                          child: GestureDetector(
+                            onTap: () => _navigateToActivityDetail(activity),
+                            child: const Icon(
+                              Icons.location_on, 
+                              color: Colors.red, 
+                              size: 40
+                            ),
+                          ),
                         );
                       }).toList(),
-                      builder: (context, markers) => Container(
-                        alignment: Alignment.center,
-                        decoration: const BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          markers.length.toString(),
-                          style: const TextStyle(color: Colors.white),
+                      builder: (context, markers) => GestureDetector(
+                        onTap: () {
+                          // When cluster is tapped, zoom in to show individual markers
+                          if (markers.isNotEmpty) {
+                            final bounds = _calculateBounds(markers);
+                            _mapController.fitCamera(CameraFit.bounds(bounds: bounds));
+                          }
+                        },
+                        child: Container(
+                          alignment: Alignment.center,
+                          decoration: const BoxDecoration(
+                            color: Colors.blue,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            markers.length.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
+                      onClusterTap: (cluster) {
+                        // Alternative cluster tap handler
+                        final bounds = _calculateBounds(cluster.markers);
+                        _mapController.fitCamera(CameraFit.bounds(bounds: bounds));
+                      },
                     ),
                   ),
               ],
@@ -196,28 +245,7 @@ class _MapPageState extends State<MapPage> {
                   itemBuilder: (context, index) {
                     final activity = activities[index];
                     return GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ActivityDetailPage(
-                              icon: Icons.place, // ou autre selon l'activité
-                              title: activity['name'] ?? '',
-                              location: activity['address'] ?? '',
-                              weather: weatherDescription,
-                              temperature: activity['temperature'] ?? '–',
-                              duration: activity['duration'] ?? '–',
-                              distance: activity['distance'] ?? '–',
-                              userLocation: LatLng(53.0793, 8.8017), // TODO: remplace par vraie position GPS
-                              destinationLocation: LatLng(activity['lat'], activity['lng']),
-                              openingHours: activity['openingHours'],
-                              website: activity['website'],
-                              contact: activity['contact'],
-                              wikipedia: activity['wikipedia'],
-                            ),
-                          ),
-                        );
-                      },
+                      onTap: () => _navigateToActivityDetail(activity),
                       child: Card(
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -419,6 +447,28 @@ class _MapPageState extends State<MapPage> {
           ),
         ],
       ),
+    );
+  }
+
+  // Helper method to calculate bounds for camera fitting
+  LatLngBounds _calculateBounds(List<Marker> markers) {
+    if (markers.isEmpty) return LatLngBounds.fromPoints([_currentCenter]);
+    
+    double minLat = markers.first.point.latitude;
+    double maxLat = markers.first.point.latitude;
+    double minLng = markers.first.point.longitude;
+    double maxLng = markers.first.point.longitude;
+
+    for (final marker in markers) {
+      minLat = minLat < marker.point.latitude ? minLat : marker.point.latitude;
+      maxLat = maxLat > marker.point.latitude ? maxLat : marker.point.latitude;
+      minLng = minLng < marker.point.longitude ? minLng : marker.point.longitude;
+      maxLng = maxLng > marker.point.longitude ? maxLng : marker.point.longitude;
+    }
+
+    return LatLngBounds(
+      LatLng(minLat, minLng),
+      LatLng(maxLat, maxLng),
     );
   }
 }

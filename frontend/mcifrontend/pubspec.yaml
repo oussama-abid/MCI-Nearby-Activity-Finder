@@ -45,6 +45,7 @@ dependencies:
   google_fonts: ^6.2.1
   intl: any
   supabase_flutter: ^1.10.17
+  flutter_map_marker_popup: ^6.1.2
 
 
   cupertino_icons: ^1.0.8
