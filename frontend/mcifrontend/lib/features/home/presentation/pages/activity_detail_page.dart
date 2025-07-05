@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:geolocator/geolocator.dart'; // Add this dependency
 
 class ActivityDetailPage extends StatefulWidget {
   final IconData icon;
@@ -45,6 +46,7 @@ class _ActivityDetailPageState extends State<ActivityDetailPage>
     with TickerProviderStateMixin {
   List<LatLng> routePoints = [];
   bool isLoading = true;
+  bool isNavigationLoading = false;
   late AnimationController _fadeController;
   late AnimationController _slideController;
   late Animation<double> _fadeAnimation;
@@ -111,6 +113,71 @@ class _ActivityDetailPageState extends State<ActivityDetailPage>
     } catch (e) {
       debugPrint('Route fetch error: $e');
       setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _startNavigation() async {
+    setState(() {
+      isNavigationLoading = true;
+    });
+
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showLocationError('Les services de localisation sont désactivés.');
+        return;
+      }
+
+      // Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showLocationError('L\'autorisation de localisation est refusée.');
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        _showLocationError('L\'autorisation de localisation est refusée définitivement.');
+        return;
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
+      );
+
+      // Launch Google Maps with actual current location
+      final url = Uri.parse(
+          'https://www.google.com/maps/dir/?api=1&origin=${position.latitude},${position.longitude}&destination=${widget.destinationLocation.latitude},${widget.destinationLocation.longitude}&travelmode=walking');
+      
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        _showLocationError('Impossible d\'ouvrir Google Maps.');
+      }
+    } catch (e) {
+      debugPrint('Navigation error: $e');
+      _showLocationError('Erreur lors de l\'obtention de votre position: $e');
+    } finally {
+      setState(() {
+        isNavigationLoading = false;
+      });
+    }
+  }
+
+  void _showLocationError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -560,15 +627,20 @@ class _ActivityDetailPageState extends State<ActivityDetailPage>
             ],
           ),
           child: ElevatedButton.icon(
-            onPressed: () {
-              final url = Uri.parse(
-                  'https://www.google.com/maps/dir/?api=1&origin=${widget.userLocation.latitude},${widget.userLocation.longitude}&destination=${widget.destinationLocation.latitude},${widget.destinationLocation.longitude}&travelmode=walking');
-              launchUrl(url, mode: LaunchMode.externalApplication);
-            },
-            icon: const Icon(Icons.directions_walk, color: Colors.white),
-            label: const Text(
-              'Démarrer la navigation',
-              style: TextStyle(
+            onPressed: isNavigationLoading ? null : _startNavigation,
+            icon: isNavigationLoading 
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.directions_walk, color: Colors.white),
+            label: Text(
+              isNavigationLoading ? 'Localisation...' : 'Démarrer la navigation',
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,

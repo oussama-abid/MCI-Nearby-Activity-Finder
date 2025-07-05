@@ -5,11 +5,36 @@ import 'dart:convert';
 import 'dart:ui';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:mcifrontend/features/home/domain/activity_filter.dart';
 import 'package:mcifrontend/features/home/presentation/widgets/filter_sheet.dart';
 import '../../../../utils/api_utils.dart';
 import 'activity_detail_page.dart';
 import '../../../../utils/user_id_helper.dart';
+
+// Add this class for city suggestions
+class CitySuggestion {
+  final String name;
+  final String displayName;
+  final LatLng coordinates;
+
+  CitySuggestion({
+    required this.name,
+    required this.displayName,
+    required this.coordinates,
+  });
+
+  factory CitySuggestion.fromJson(Map<String, dynamic> json) {
+    return CitySuggestion(
+      name: json['name'] ?? '',
+      displayName: json['display_name'] ?? '',
+      coordinates: LatLng(
+        double.parse(json['lat']),
+        double.parse(json['lon']),
+      ),
+    );
+  }
+}
 
 List<String> userFavorites = [];
 List<Map<String, dynamic>> filteredActivitiesGlobal = [];
@@ -23,7 +48,7 @@ class MapPage extends StatefulWidget {
 
 class _MapPageState extends State<MapPage> {
   final MapController _mapController = MapController();
-  LatLng _currentCenter = LatLng(53.0793, 8.8017); // Bremen
+  LatLng _currentCenter = LatLng(53.0793, 8.8017); // Default Bremen
   late Future<Map<String, dynamic>> _futureData;
   bool showMap = true;
   String weatherDescription = '';
@@ -32,12 +57,30 @@ class _MapPageState extends State<MapPage> {
   bool _loading = false;
   List<Map<String, dynamic>> _activities = [];
   String? userId;
+  bool _isLocationLoaded = false;
+  bool _locationPermissionGranted = false;
+
+  // Add these variables for city suggestions
+  List<CitySuggestion> _citySuggestions = [];
+  bool _showSuggestions = false;
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _initUser();
-    _futureData = _loadInitialData();
+    _initLocationAndLoadData();
+    _setupFocusListener();
+  }
+
+  void _setupFocusListener() {
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) {
+        _hideSuggestions();
+      }
+    });
   }
 
   void _initUser() async {
@@ -45,6 +88,286 @@ class _MapPageState extends State<MapPage> {
     setState(() {
       userId = id;
     });
+  }
+
+  Future<void> _initLocationAndLoadData() async {
+    await _getCurrentLocation();
+    _futureData = _loadInitialData();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    setState(() => _loading = true);
+    
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showLocationError('Location services are disabled. Please enable them in settings.');
+        setState(() => _loading = false);
+        return;
+      }
+
+      // Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showLocationError('Location permissions are denied. Using default location.');
+          setState(() => _loading = false);
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        _showLocationError('Location permissions are permanently denied. Please enable them in settings.');
+        setState(() => _loading = false);
+        return;
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
+      );
+
+      setState(() {
+        _currentCenter = LatLng(position.latitude, position.longitude);
+        _isLocationLoaded = true;
+        _locationPermissionGranted = true;
+        _loading = false;
+      });
+
+      // Move map to current location
+      _mapController.move(_currentCenter, 13);
+      
+      // Update location controller with current city name
+      _updateLocationControllerWithCurrentCity();
+
+    } catch (e) {
+      print('Error getting location: $e');
+      _showLocationError('Could not get current location. Using default location.');
+      setState(() => _loading = false);
+    }
+  }
+
+  void _showLocationError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _updateLocationControllerWithCurrentCity() async {
+    try {
+      final cityName = await _getCityNameFromCoordinates(_currentCenter);
+      if (cityName != null && mounted) {
+        setState(() {
+          _locationController.text = cityName;
+        });
+      }
+    } catch (e) {
+      print('Error getting city name: $e');
+    }
+  }
+
+  Future<String?> _getCityNameFromCoordinates(LatLng coordinates) async {
+    final uri = Uri.parse(
+      'https://nominatim.openstreetmap.org/reverse?format=json&lat=${coordinates.latitude}&lon=${coordinates.longitude}&zoom=10&addressdetails=1'
+    );
+    
+    try {
+      final response = await http.get(uri, headers: {
+        'User-Agent': 'flutter-dayventure-app'
+      });
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final address = data['address'] as Map<String, dynamic>?;
+        
+        if (address != null) {
+          // Try to get city name from different possible fields
+          return address['city'] ?? 
+                 address['town'] ?? 
+                 address['village'] ?? 
+                 address['municipality'] ?? 
+                 address['county'] ?? 
+                 'Unknown Location';
+        }
+      }
+    } catch (e) {
+      print("Error getting city name: $e");
+    }
+    return null;
+  }
+
+  // Add this method to fetch city suggestions
+  Future<void> _fetchCitySuggestions(String query) async {
+    if (query.length < 2) {
+      setState(() {
+        _citySuggestions = [];
+        _showSuggestions = false;
+      });
+      _hideSuggestions();
+      return;
+    }
+
+    final uri = Uri.parse(
+      'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=5&addressdetails=1&type=city'
+    );
+    
+    try {
+      final response = await http.get(uri, headers: {
+        'User-Agent': 'flutter-dayventure-app'
+      });
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          final suggestions = data.take(5).map((item) {
+            return CitySuggestion.fromJson(item);
+          }).toList();
+          
+          setState(() {
+            _citySuggestions = suggestions;
+            _showSuggestions = suggestions.isNotEmpty;
+          });
+          
+          if (_showSuggestions) {
+            _showSuggestionsOverlay();
+          } else {
+            _hideSuggestions();
+          }
+        }
+      }
+    } catch (e) {
+      print("Error fetching city suggestions: $e");
+    }
+  }
+
+  void _showSuggestionsOverlay() {
+    _hideSuggestions(); // Remove existing overlay first
+    
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: MediaQuery.of(context).size.width - 32 - 100, // Account for margins and filter button
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 52), // Position below the search bar
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 200),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: _citySuggestions.length,
+                itemBuilder: (context, index) {
+                  final suggestion = _citySuggestions[index];
+                  return InkWell(
+                    onTap: () => _selectSuggestion(suggestion),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.location_city,
+                            color: Colors.grey,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  suggestion.name,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                if (suggestion.displayName.isNotEmpty)
+                                  Text(
+                                    suggestion.displayName,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _hideSuggestions() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    setState(() {
+      _showSuggestions = false;
+    });
+  }
+
+  void _selectSuggestion(CitySuggestion suggestion) {
+    setState(() {
+      _locationController.text = suggestion.name;
+      _currentCenter = suggestion.coordinates;
+    });
+    
+    _hideSuggestions();
+    _focusNode.unfocus();
+    
+    // Move map to selected location
+    _mapController.move(suggestion.coordinates, 13);
+    
+    // Reload activities for new location
+    _futureData = _loadInitialData();
+    
+    // Show success message
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Moved to: ${suggestion.name}'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<Map<String, dynamic>> _loadInitialData() async {
@@ -70,20 +393,28 @@ class _MapPageState extends State<MapPage> {
   }
 
   Future<LatLng?> getCoordinatesFromLocation(String locationName) async {
-    final uri = Uri.parse('https://nominatim.openstreetmap.org/search?q=$locationName&format=json&limit=1');
+    if (locationName.trim().isEmpty) return null;
+    
+    final uri = Uri.parse(
+      'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(locationName)}&format=json&limit=1&addressdetails=1'
+    );
+    
     try {
       final response = await http.get(uri, headers: {
         'User-Agent': 'flutter-dayventure-app'
       });
+      
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data is List && data.isNotEmpty) {
           final item = data[0];
           final latStr = item['lat']?.toString();
           final lonStr = item['lon']?.toString();
+          
           if (latStr != null && lonStr != null) {
             final lat = double.tryParse(latStr);
             final lon = double.tryParse(lonStr);
+            
             if (lat != null && lon != null) {
               return LatLng(lat, lon);
             }
@@ -94,6 +425,102 @@ class _MapPageState extends State<MapPage> {
       print("Erreur de géolocalisation: $e");
     }
     return null;
+  }
+
+  Future<void> _searchAndMoveToLocation() async {
+    final location = _locationController.text.trim();
+    if (location.isEmpty) return;
+
+    _hideSuggestions();
+    _focusNode.unfocus();
+    setState(() => _loading = true);
+    
+    try {
+      final coords = await getCoordinatesFromLocation(location);
+      if (coords != null) {
+        setState(() {
+          _currentCenter = coords;
+          _loading = false;
+        });
+        
+        // Animate to the new location
+        _mapController.move(coords, 13);
+        
+        // Reload activities for new location
+        _futureData = _loadInitialData();
+        
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Moved to: $location'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        setState(() => _loading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Location "$location" not found. Please try a different search.'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+      print('Search error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error searching for location. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _recenterToCurrentLocation() async {
+    if (!_locationPermissionGranted) {
+      await _getCurrentLocation();
+      return;
+    }
+
+    setState(() => _loading = true);
+    
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
+      );
+
+      setState(() {
+        _currentCenter = LatLng(position.latitude, position.longitude);
+        _loading = false;
+      });
+
+      _mapController.move(_currentCenter, 13);
+      _updateLocationControllerWithCurrentCity();
+      _futureData = _loadInitialData();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Centered to current location'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+      _showLocationError('Could not get current location');
+    }
   }
 
   Future<Map<String, dynamic>> fetchActivities() async {
@@ -146,7 +573,7 @@ class _MapPageState extends State<MapPage> {
           temperature: activity['temperature'] ?? '–',
           duration: activity['duration'] ?? '–',
           distance: activity['distance'] ?? '–',
-          userLocation: LatLng(53.0793, 8.8017), // TODO: remplace par vraie position GPS
+          userLocation: _currentCenter, // Use actual current location
           destinationLocation: LatLng(activity['lat'], activity['lng']),
           openingHours: activity['openingHours'],
           website: activity['website'],
@@ -172,13 +599,30 @@ class _MapPageState extends State<MapPage> {
                 minZoom: 3,
                 interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
                 onTap: (tapPosition, point) {
-                  // Handle map tap to close any open popups if needed
+                  _hideSuggestions();
+                  _focusNode.unfocus();
                 },
               ),
               children: [
                 TileLayer(
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 ),
+                // Current location marker
+                if (_isLocationLoaded)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        width: 40,
+                        height: 40,
+                        point: _currentCenter,
+                        child: const Icon(
+                          Icons.my_location,
+                          color: Colors.blue,
+                          size: 40,
+                        ),
+                      ),
+                    ],
+                  ),
                 if (_activities.isNotEmpty)
                   MarkerClusterLayerWidget(
                     options: MarkerClusterLayerOptions(
@@ -336,45 +780,51 @@ class _MapPageState extends State<MapPage> {
             child: Row(
               children: [
                 Expanded(
-                  child: Container(
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.location_on, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: _locationController,
-                            decoration: const InputDecoration.collapsed(hintText: 'Entrez un lieu'),
+                  child: CompositedTransformTarget(
+                    link: _layerLink,
+                    child: Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_on, color: Colors.blue),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _locationController,
+                              focusNode: _focusNode,
+                              decoration: const InputDecoration.collapsed(
+                                hintText: 'Search for a city or location...'
+                              ),
+                              onChanged: (value) {
+                                _fetchCitySuggestions(value);
+                              },
+                              onSubmitted: (value) => _searchAndMoveToLocation(),
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.check, color: Colors.green),
-                          onPressed: () async {
-                            final location = _locationController.text.trim();
-                            final coords = await getCoordinatesFromLocation(location);
-                            if (coords != null) {
-                              setState(() {
-                                _currentCenter = coords;
-                                _mapController.move(coords, 12);
-                                _futureData = _loadInitialData();
-                              });
-                            }
-                          },
-                        ),
-                      ],
+                          IconButton(
+                            icon: const Icon(Icons.search, color: Colors.blue),
+                            onPressed: _searchAndMoveToLocation,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.my_location, color: Colors.green),
+                            onPressed: _recenterToCurrentLocation,
+                            tooltip: 'Current Location',
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton.icon(
                   onPressed: () async {
+                    _hideSuggestions();
                     final result = await showModalBottomSheet<ActivityFilter>(
                       context: context,
                       isScrollControlled: true,
@@ -412,9 +862,12 @@ class _MapPageState extends State<MapPage> {
               transitionBuilder: (child, animation) => RotationTransition(turns: animation, child: child),
               child: FloatingActionButton(
                 key: ValueKey(showMap),
-                tooltip: showMap ? 'Afficher la liste' : 'Afficher la carte',
+                tooltip: showMap ? 'Show List' : 'Show Map',
                 backgroundColor: Colors.blueAccent,
-                onPressed: () => setState(() => showMap = !showMap),
+                onPressed: () {
+                  _hideSuggestions();
+                  setState(() => showMap = !showMap);
+                },
                 child: Icon(showMap ? Icons.list : Icons.map, color: Colors.white,),
               ),
             ),
@@ -435,7 +888,7 @@ class _MapPageState extends State<MapPage> {
                   const Icon(Icons.wb_sunny, color: Colors.orange, size: 24),
                   const SizedBox(width: 8),
                   Text(
-                    weatherDescription.isNotEmpty ? weatherDescription : 'Chargement...',
+                    weatherDescription.isNotEmpty ? weatherDescription : 'Loading...',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -470,5 +923,11 @@ class _MapPageState extends State<MapPage> {
       LatLng(minLat, minLng),
       LatLng(maxLat, maxLng),
     );
+  }
+
+  @override
+  void dispose() {
+    _locationController.dispose();
+    super.dispose();
   }
 }

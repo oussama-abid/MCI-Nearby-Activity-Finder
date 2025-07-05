@@ -34,6 +34,25 @@ function toRad(value) {
     return (value * Math.PI) / 180;
 }
 
+function parseQueryParam(value, defaultValue, type = 'string') {
+    if (!value) return defaultValue;
+    
+    switch (type) {
+        case 'int':
+            const intVal = parseInt(value);
+            return isNaN(intVal) ? defaultValue : intVal;
+        case 'float':
+            const floatVal = parseFloat(value.replace(',', '.'));
+            return isNaN(floatVal) ? defaultValue : floatVal;
+        case 'bool':
+            return value === 'true';
+        case 'array':
+            return value.split(',').filter(Boolean);
+        default:
+            return value;
+    }
+}
+
 export default async function handler(req, res) {
     // Add CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -47,52 +66,82 @@ export default async function handler(req, res) {
     }
 
     try {
-        const lat = parseFloat(req.query.lat);
-        const lng = parseFloat(req.query.lng);
-        const radiusRaw = (req.query.radius || '25').replace(',', '.');
-        const radiusKm = parseFloat(radiusRaw);
-        const weatherRaw = req.query.weather || "any";
-        const weather = mapWeatherToTag(weatherRaw);
+        console.log('📥 Received query parameters:', req.query);
+        
+        // Parse location parameters
+        const lat = parseQueryParam(req.query.lat, null, 'float');
+        const lng = parseQueryParam(req.query.lng, null, 'float');
+        const radiusKm = parseQueryParam(req.query.radius, 25, 'float');
+        
+        // Validate required parameters
+        if (isNaN(lat) || isNaN(lng) || isNaN(radiusKm)) {
+            return res.status(400).json({ 
+                error: "Invalid or missing lat/lng/radius parameters",
+                received: { lat, lng, radius: radiusKm }
+            });
+        }
 
-        const childrenCount = parseInt(req.query.childrenCount || '0');
-        const childAge = parseInt(req.query.childAge || '0');
-        const popularity = parseInt(req.query.popularity || '0');
-        const considerWeather = req.query.considerWeather === 'true';
-        const accessibleOnly = req.query.accessibleOnly === 'true';
-        const favoritesOnly = req.query.favoritesOnly === 'true';
-        const showVisited = req.query.showVisited === 'true';
-        const environment = req.query.environment || null;
-        const interests = req.query.interests ? req.query.interests.split(',') : [];
-        const userId = req.query.userId || null;
+        // Parse weather parameters
+        const weatherRaw = parseQueryParam(req.query.weather, "any");
+        const weather = mapWeatherToTag(weatherRaw);
+        const considerWeather = parseQueryParam(req.query.considerWeather, false, 'bool');
+
+        // Parse filter parameters
+        const childrenCount = parseQueryParam(req.query.childrenCount, 0, 'int');
+        const childAge = parseQueryParam(req.query.childAge, 0, 'int');
+        const popularity = parseQueryParam(req.query.popularity, 0, 'int');
+        const accessibleOnly = parseQueryParam(req.query.accessibleOnly, false, 'bool');
+        const favoritesOnly = parseQueryParam(req.query.favoritesOnly, false, 'bool');
+        const showVisited = parseQueryParam(req.query.showVisited, true, 'bool');
+        const environment = parseQueryParam(req.query.environment, null);
+        const interests = parseQueryParam(req.query.interests, [], 'array');
+        const userId = parseQueryParam(req.query.userId, null);
+
+        // Parse additional filter parameters (commonly used)
+        const duration = parseQueryParam(req.query.duration, null);
+        const priceRange = parseQueryParam(req.query.priceRange, null);
+        const rating = parseQueryParam(req.query.rating, 0, 'float');
+
+        console.log('🔍 Parsed filters:', {
+            location: { lat, lng, radius: radiusKm },
+            weather: { raw: weatherRaw, mapped: weather, consider: considerWeather },
+            children: { count: childrenCount, age: childAge },
+            other: { popularity, accessibleOnly, favoritesOnly, showVisited, environment, interests, userId }
+        });
 
         const speedKmh = 5;
 
-        if (isNaN(lat) || isNaN(lng) || isNaN(radiusKm)) {
-            return res.status(400).json({ error: "Invalid or missing lat/lng/radius" });
-        }
-
+        // Fetch and insert activities from external sources
         await fetchAndInsert({ lat, lon: lng, radius: radiusKm * 1000 });
 
+        // Build Supabase query
         let query = supabase.from("activities").select("*");
 
-        if (considerWeather) {
+        // Apply filters
+        if (considerWeather && weather !== "any") {
             query = query.eq("weather_tag", weather);
         }
+        
         if (accessibleOnly) {
             query = query.eq("accessible", true);
         }
+        
         if (popularity > 0) {
             query = query.gte("popularity", popularity);
         }
-        if (environment) {
+        
+        if (environment && environment !== "any") {
             query = query.eq("environment", environment);
         }
+        
         if (interests.length > 0) {
             query = query.overlaps("interests", interests);
         }
+        
         if (favoritesOnly && userId) {
             query = query.contains("user_favorites", [userId]);
         }
+        
         if (!showVisited && userId) {
             query = query.not("visited_by", "cs", `{${userId}}`);
         }
@@ -101,6 +150,45 @@ export default async function handler(req, res) {
             query = query.eq("enfant_friendly", true);
         }
 
+        // Apply rating filter if specified
+        if (rating > 0) {
+            query = query.gte("rating", rating);
+        }
+
+        // Apply duration filter if specified
+        if (duration && duration !== "any") {
+            switch (duration) {
+                case "short":
+                    query = query.lte("duration_minutes", 60);
+                    break;
+                case "medium":
+                    query = query.and("duration_minutes.gte.61", "duration_minutes.lte.180");
+                    break;
+                case "long":
+                    query = query.gte("duration_minutes", 181);
+                    break;
+            }
+        }
+
+        // Apply price range filter if specified
+        if (priceRange && priceRange !== "any") {
+            switch (priceRange) {
+                case "free":
+                    query = query.eq("price_range", "free");
+                    break;
+                case "low":
+                    query = query.in("price_range", ["free", "low"]);
+                    break;
+                case "medium":
+                    query = query.in("price_range", ["free", "low", "medium"]);
+                    break;
+                case "high":
+                    // No filter for high - show all
+                    break;
+            }
+        }
+
+        console.log('📊 Executing Supabase query...');
         const { data, error } = await query;
 
         if (error) {
@@ -108,6 +196,9 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: error.message });
         }
 
+        console.log(`📈 Found ${data.length} activities before distance filtering`);
+
+        // Filter by distance and add calculated fields
         const result = data
             .map((a) => {
                 const distKm = haversineDistance(lat, lng, a.lat, a.lng);
@@ -116,20 +207,41 @@ export default async function handler(req, res) {
                     ...a,
                     distance: `${distKm.toFixed(2)} km`,
                     duration: `${durationMin} min`,
+                    distanceKm: distKm, // Keep numeric value for filtering
                 };
             })
-            .filter((a) => parseFloat(a.distance) <= radiusKm);
+            .filter((a) => a.distanceKm <= radiusKm)
+            .sort((a, b) => a.distanceKm - b.distanceKm); // Sort by distance
 
-        console.log(`📊 Activités retenues : ${result.length}`);
+        console.log(`📊 Final result: ${result.length} activities within ${radiusKm}km`);
 
         return res.status(200).json({
             weather: weather,
             weatherDescription: weatherRaw,
             activities: result,
+            filters: {
+                applied: {
+                    location: { lat, lng, radius: radiusKm },
+                    weather: considerWeather ? weather : null,
+                    children: childrenCount > 0 ? { count: childrenCount, age: childAge } : null,
+                    accessibility: accessibleOnly,
+                    favorites: favoritesOnly,
+                    visited: showVisited,
+                    environment: environment !== "any" ? environment : null,
+                    interests: interests.length > 0 ? interests : null,
+                    popularity: popularity > 0 ? popularity : null,
+                    rating: rating > 0 ? rating : null,
+                    duration: duration !== "any" ? duration : null,
+                    priceRange: priceRange !== "any" ? priceRange : null,
+                }
+            }
         });
 
     } catch (e) {
-        console.error("❌ Unexpected error:", e.message);
-        return res.status(500).json({ error: e.message });
+        console.error("❌ Unexpected error:", e.message, e.stack);
+        return res.status(500).json({ 
+            error: e.message,
+            stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
+        });
     }
 }
