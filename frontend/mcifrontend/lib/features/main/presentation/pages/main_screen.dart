@@ -4,6 +4,7 @@ import 'package:mcifrontend/shared/widgets/bottom_nav_bar.dart';
 // Import your real screen widgets
 import 'package:mcifrontend/features/home/presentation/pages/home_screen.dart';
 import 'package:mcifrontend/features/filter/presentation/pages/filter_screen.dart';
+import 'package:mcifrontend/features/home/presentation/pages/home_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);

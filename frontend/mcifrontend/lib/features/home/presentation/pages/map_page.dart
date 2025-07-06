@@ -37,8 +37,109 @@ class CitySuggestion {
   }
 }
 
+// Add weather data class
+class WeatherData {
+  final String description;
+  final double temperature;
+  final String condition;
+  final String icon;
+
+  WeatherData({
+    required this.description,
+    required this.temperature,
+    required this.condition,
+    required this.icon,
+  });
+
+  factory WeatherData.fromJson(Map<String, dynamic> json) {
+    try {
+      // Your API returns nested structure, so we need to extract from the right places
+      final weather = json['weather'] as Map<String, dynamic>?;
+      final temperature = json['temperature'] as Map<String, dynamic>?;
+      
+      return WeatherData(
+        description: weather?['description'] ?? 'Unknown',
+        temperature: _safeToDouble(temperature?['current']) ?? 20.0,
+        condition: weather?['main'] ?? 'clear',
+        icon: weather?['mapped'] ?? 'sunny', // Use the mapped weather condition
+      );
+    } catch (e) {
+      print('❌ Error parsing weather JSON: $e');
+      print('📄 Received JSON: $json');
+      
+      // Return fallback data if parsing fails
+      return WeatherData(
+        description: 'Weather data currently unavailable',
+        temperature: 20.0,
+        condition: 'clear',
+        icon: 'sunny',
+      );
+    }
+  }
+    static double? _safeToDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) {
+      try {
+        return double.parse(value);
+      } catch (e) {
+        print('⚠️ Could not parse "$value" as double');
+        return null;
+      }
+    }
+    return null;
+  }
+
+}
+
+
 List<String> userFavorites = [];
 List<Map<String, dynamic>> filteredActivitiesGlobal = [];
+
+IconData _getWeatherIcon(String condition) {
+  switch (condition) {
+    case 'clear':
+      return Icons.wb_sunny;
+    case 'clouds':
+      return Icons.cloud;
+    case 'rain':
+      return Icons.grain;
+    case 'snow':
+      return Icons.ac_unit;
+    case 'thunderstorm':
+      return Icons.flash_on;
+    case 'drizzle':
+      return Icons.grain;
+    case 'mist':
+    case 'fog':
+      return Icons.blur_on;
+    default:
+      return Icons.wb_sunny;
+  }
+}
+
+Color _getWeatherColor(String condition) {
+  switch (condition) {
+    case 'clear':
+      return Colors.orange;
+    case 'clouds':
+      return Colors.grey;
+    case 'rain':
+      return Colors.blue;
+    case 'snow':
+      return Colors.lightBlue;
+    case 'thunderstorm':
+      return Colors.deepPurple;
+    case 'drizzle':
+      return Colors.blueAccent;
+    case 'mist':
+    case 'fog':
+      return Colors.grey;
+    default:
+      return Colors.orange;
+  }
+}
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -53,6 +154,9 @@ class _MapPageState extends State<MapPage> {
   late Future<Map<String, dynamic>> _futureData;
   bool showMap = true;
   String weatherDescription = '';
+  double currentTemperature = 20.0;
+  String currentWeatherCondition = 'clear';
+  String currentWeatherIcon = 'sunny';
   final TextEditingController _locationController = TextEditingController();
   ActivityFilter currentFilter = ActivityFilter();
   bool _loading = false;
@@ -92,6 +196,69 @@ void initState() {
     });
   }
 
+  // NEW: Fetch weather data from API
+Future<WeatherData> _fetchWeatherDataWithUri(LatLng location) async {
+  try {
+    // Create URI similar to how buildFilteredUri works in fetchActivities
+    final uri = Uri.http(
+      '192.168.80.1:3000',
+      '/api/weather',
+      {
+        'lat': location.latitude.toString(),
+        'lng': location.longitude.toString(),
+      },
+    );
+    
+    print('🌤️ Weather API URI: $uri');
+    
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+    print('🌤️ Weather API Response Status: ${response.statusCode}');
+    print('🌤️ Weather API Response Body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['error'] != null) {
+        throw Exception(data['error']);
+      }
+      return WeatherData.fromJson(data);
+    } else {
+      print('❌ Weather API error: ${response.statusCode} - ${response.body}');
+      throw Exception('Weather API returned ${response.statusCode}');
+    }
+  } catch (e) {
+    print('❌ Error fetching weather: $e');
+    return WeatherData(
+      description: 'Weather data currently unavailable',
+      temperature: 20.0,
+      condition: 'clear',
+      icon: 'sunny',
+    );
+  }
+}
+
+
+  // UPDATED: Load weather data when location changes
+ Future<void> _updateWeatherForLocation(LatLng location) async {
+  try {
+    final weatherData = await _fetchWeatherDataWithUri(location);
+    setState(() {
+      weatherDescription = weatherData.description;
+      currentTemperature = weatherData.temperature;
+      currentWeatherCondition = weatherData.condition;
+      currentWeatherIcon = weatherData.icon;
+    });
+  } catch (e) {
+    print('Error updating weather: $e');
+    setState(() {
+      weatherDescription = 'Weather data currently unavailable';
+      currentTemperature = 20.0;
+      currentWeatherCondition = 'clear';
+      currentWeatherIcon = 'sunny';
+    });
+  }
+}
+
  Future<void> _initLocationAndLoadData() async {
   // Start both operations in parallel
   final locationFuture = _getCurrentLocationWithFallback();
@@ -108,6 +275,7 @@ void initState() {
     setState(() => _loading = false);
   }
 }
+
 Future<void> _checkLocationSettings() async {
   bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
   if (!serviceEnabled) {
@@ -126,6 +294,7 @@ Future<void> _checkLocationSettings() async {
     return;
   }
 }
+
 void _showLocationSettingsDialog() {
   showDialog(
     context: context,
@@ -195,6 +364,7 @@ void _showPermissionSettingsDialog() {
   );
 }
 
+  // UPDATED: Get current location and fetch weather
   Future<void> _getCurrentLocation() async {
   setState(() => _loading = true);
 
@@ -230,9 +400,11 @@ void _showPermissionSettingsDialog() {
       timeLimit: const Duration(seconds: 5), // Reduced from 10 to 5 seconds
     );
 
+    final newLocation = LatLng(position.latitude, position.longitude);
+    
     setState(() {
-      _userActualLocation = LatLng(position.latitude, position.longitude);
-      _currentCenter = LatLng(position.latitude, position.longitude);
+      _userActualLocation = newLocation;
+      _currentCenter = newLocation;
       _isLocationLoaded = true;
       _locationPermissionGranted = true;
       _loading = false;
@@ -240,6 +412,9 @@ void _showPermissionSettingsDialog() {
 
     // Move map to current location
     _mapController.move(_currentCenter, 13);
+
+    // Update weather for new location
+    await _updateWeatherForLocation(newLocation);
 
     // Update location controller with current city name
     _updateLocationControllerWithCurrentCity();
@@ -249,6 +424,7 @@ void _showPermissionSettingsDialog() {
     setState(() => _loading = false);
   }
 }
+
 Future<void> _getCurrentLocationWithFallback() async {
   setState(() => _loading = true);
 
@@ -258,15 +434,21 @@ Future<void> _getCurrentLocationWithFallback() async {
     
     if (lastKnownPosition != null) {
       // Use last known position immediately
+      final newLocation = LatLng(lastKnownPosition.latitude, lastKnownPosition.longitude);
+      
       setState(() {
-        _userActualLocation = LatLng(lastKnownPosition.latitude, lastKnownPosition.longitude);
-        _currentCenter = LatLng(lastKnownPosition.latitude, lastKnownPosition.longitude);
+        _userActualLocation = newLocation;
+        _currentCenter = newLocation;
         _isLocationLoaded = true;
         _locationPermissionGranted = true;
         _loading = false;
       });
       
       _mapController.move(_currentCenter, 13);
+      
+      // Update weather for this location
+      await _updateWeatherForLocation(newLocation);
+      
       _updateLocationControllerWithCurrentCity();
       
       // Optional: Get fresh location in background
@@ -282,6 +464,7 @@ Future<void> _getCurrentLocationWithFallback() async {
     setState(() => _loading = false);
   }
 }
+
 Future<void> _getCurrentLocationFresh() async {
   try {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -300,19 +483,26 @@ Future<void> _getCurrentLocationFresh() async {
       timeLimit: const Duration(seconds: 5),
     );
 
+    final newLocation = LatLng(position.latitude, position.longitude);
+
     setState(() {
-      _userActualLocation = LatLng(position.latitude, position.longitude);
-      _currentCenter = LatLng(position.latitude, position.longitude);
+      _userActualLocation = newLocation;
+      _currentCenter = newLocation;
       _isLocationLoaded = true;
       _locationPermissionGranted = true;
     });
 
     _mapController.move(_currentCenter, 13);
+    
+    // Update weather for new location
+    await _updateWeatherForLocation(newLocation);
+    
     _updateLocationControllerWithCurrentCity();
   } catch (e) {
     print('Error getting fresh location: $e');
   }
 }
+
   void _showLocationError(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -456,7 +646,8 @@ Future<void> _getCurrentLocationFresh() async {
     }
   }
 
-  void _selectSuggestion(CitySuggestion suggestion) {
+  // UPDATED: Select suggestion and update weather
+  void _selectSuggestion(CitySuggestion suggestion) async {
     setState(() {
       _locationController.text = suggestion.name;
       _currentCenter = suggestion.coordinates;
@@ -468,6 +659,9 @@ Future<void> _getCurrentLocationFresh() async {
 
     // Move map to selected location
     _mapController.move(suggestion.coordinates, 13);
+
+    // Update weather for new location
+    await _updateWeatherForLocation(suggestion.coordinates);
 
     // Automatically reload activities for new location
     _futureData = _loadInitialData();
@@ -629,9 +823,13 @@ Future<void> _getCurrentLocationFresh() async {
     });
   }
 
+  // UPDATED: Load initial data with weather
   Future<Map<String, dynamic>> _loadInitialData() async {
     setState(() => _loading = true);
     try {
+      // Update weather for current location
+      await _updateWeatherForLocation(_currentCenter);
+      
       final data = await fetchActivities();
       setState(() {
         _loading = false;
@@ -643,11 +841,11 @@ Future<void> _getCurrentLocationFresh() async {
       });
       return data;
     } catch (e) {
-      print('❌ Erreur dans _loadInitialData: $e');
+      print('❌ Error in _loadInitialData: $e');
       setState(() => _loading = false);
       return {
-        'weather': 'unknown',
-        'weatherDescription': 'Erreur',
+        'weather': currentWeatherCondition,
+        'weatherDescription': weatherDescription,
         'activities': [],
       };
     }
@@ -684,11 +882,12 @@ Future<void> _getCurrentLocationFresh() async {
         }
       }
     } catch (e) {
-      print("Erreur de géolocalisation: $e");
+      print("Geolocation error: $e");
     }
     return null;
   }
 
+  // UPDATED: Search and move to location with weather update
   Future<void> _searchAndMoveToLocation() async {
     final location = _locationController.text.trim();
     if (location.isEmpty) return;
@@ -707,6 +906,9 @@ Future<void> _getCurrentLocationFresh() async {
 
         // Animate to the new location
         _mapController.move(coords, 13);
+
+        // Update weather for new location
+        await _updateWeatherForLocation(coords);
 
         // Reload activities for new location
         _futureData = _loadInitialData();
@@ -749,6 +951,7 @@ Future<void> _getCurrentLocationFresh() async {
     }
   }
 
+  // UPDATED: Recenter to current location with weather update
   Future<void> _recenterToCurrentLocation() async {
     if (!_locationPermissionGranted) {
       await _getCurrentLocation();
@@ -762,19 +965,20 @@ Future<void> _getCurrentLocationFresh() async {
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 10),
       );
+      
+      final newLocation = LatLng(position.latitude, position.longitude);
+      
       setState(() {
-        _userActualLocation = LatLng(
-          position.latitude,
-          position.longitude,
-        ); // Update actual location
-        _currentCenter = LatLng(
-          position.latitude,
-          position.longitude,
-        ); // Update map center
+        _userActualLocation = newLocation;
+        _currentCenter = newLocation;
         _loading = false;
       });
 
       _mapController.move(_currentCenter, 13);
+      
+      // Update weather for new location
+      await _updateWeatherForLocation(newLocation);
+      
       _updateLocationControllerWithCurrentCity();
       _futureData = _loadInitialData();
 
@@ -793,8 +997,9 @@ Future<void> _getCurrentLocationFresh() async {
     }
   }
 
+  // UPDATED: Fetch activities with real weather condition
   Future<Map<String, dynamic>> fetchActivities() async {
-    print('🚀 fetchActivities() DÉMARRÉ');
+    print('🚀 fetchActivities() STARTED');
     final lat = _currentCenter.latitude;
     final lng = _currentCenter.longitude;
 
@@ -803,10 +1008,10 @@ Future<void> _getCurrentLocationFresh() async {
       endpoint: '/api/activities',
       filter: currentFilter,
       location: _currentCenter,
-      weather: 'clear',
+      weather: currentWeatherCondition, // Use real weather condition
       userId: userId,
     );
-    print('📡 URI appelée : $uri');
+    print('📡 URI called: $uri');
     print(currentFilter.toString());
     final response = await http.get(uri);
     if (response.statusCode == 200) {
@@ -818,21 +1023,20 @@ Future<void> _getCurrentLocationFresh() async {
             )
             .toList();
         filteredActivitiesGlobal = activities;
-        weatherDescription = data['weatherDescription'] ?? '';
         return {
-          'weather': data['weather'],
-          'weatherDescription': data['weatherDescription'],
+          'weather': currentWeatherCondition,
+          'weatherDescription': weatherDescription,
           'activities': activities,
         };
       } catch (e) {
-        throw Exception('Erreur de format de données');
+        throw Exception('Data format error');
       }
     } else {
       throw Exception('Failed to load activities');
     }
   }
 
-  // Method to navigate to activity detail page
+  // UPDATED: Navigate to activity detail with real weather data
  void _navigateToActivityDetail(Map<String, dynamic> activity) {
   final lat = activity['lat'] ?? activity['latitude'];
   final lng = activity['lng'] ?? activity['lon'] ?? activity['longitude'];
@@ -842,7 +1046,7 @@ Future<void> _getCurrentLocationFresh() async {
       : LatLng(0, 0);
 
   if (lat == null || lng == null) {
-    print("Activité sans coordonnées valides : ${activity['name']}");
+    print("Activity without valid coordinates: ${activity['name']}");
   }
 
   Navigator.push(
@@ -1314,34 +1518,46 @@ String _parseTemperature(dynamic temperature) {
           ),
 
           // Weather info
-          Positioned(
-            bottom: 20,
-            left: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.wb_sunny, color: Colors.orange, size: 24),
-                  const SizedBox(width: 8),
-                  Text(
-                    weatherDescription.isNotEmpty
-                        ? weatherDescription
-                        : 'Loading...',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+Positioned(
+  bottom: 20,
+  left: 16,
+  child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          _getWeatherIcon(currentWeatherIcon),
+          color: _getWeatherColor(currentWeatherCondition),
+          size: 24,
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${currentTemperature.round()}°C',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ),
+            Text(
+              weatherDescription,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+      ],
+    ),
+  ),
+),
         ],
       ),
     );

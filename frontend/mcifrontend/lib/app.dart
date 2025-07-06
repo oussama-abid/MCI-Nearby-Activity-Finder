@@ -8,6 +8,7 @@ import 'features/home/presentation/pages/map_page.dart';
 import 'features/home/presentation/pages/FavoritesPage.dart';
 import 'features/home/presentation/pages/settings_page.dart';
 import 'l10n/generated/app_localizations.dart';
+import 'features/home/presentation/pages/home_screen.dart';
 
 void main() {
   runApp(DayventureApp());
@@ -71,7 +72,9 @@ class _DayventureAppState extends State<DayventureApp> {
         : ThemeMode.dark;
 
     await prefs.setString(
-        'theme', newTheme == ThemeMode.dark ? 'dark' : 'light');
+      'theme',
+      newTheme == ThemeMode.dark ? 'dark' : 'light',
+    );
 
     setState(() {
       _themeMode = newTheme;
@@ -102,10 +105,7 @@ class _DayventureAppState extends State<DayventureApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('en'),
-        Locale('de'),
-      ],
+      supportedLocales: const [Locale('en'), Locale('de')],
       debugShowCheckedModeBanner: false,
       home: MainNavigation(
         onFontChanged: _updateFont,
@@ -113,7 +113,6 @@ class _DayventureAppState extends State<DayventureApp> {
         onDarkModeChanged: (_) => _toggleThemeMode(),
       ),
     );
-
   }
 }
 
@@ -142,6 +141,7 @@ class _MainNavigationState extends State<MainNavigation> {
   void initState() {
     super.initState();
     _pages = [
+      MyHomePage(),
       MapPage(),
       FavoritesPage(),
       SettingsPage(
@@ -165,9 +165,16 @@ class _MainNavigationState extends State<MainNavigation> {
       body: _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         items: [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: loc.home_title),
           BottomNavigationBarItem(icon: Icon(Icons.map), label: loc.map),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: loc.favourites),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: loc.settings),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.favorite),
+            label: loc.favourites,
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: loc.settings,
+          ),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
