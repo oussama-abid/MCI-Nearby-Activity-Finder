@@ -888,114 +888,121 @@ void _navigateToActivityDetail(Activity activity) {
       ],
     );
   }
+Widget _buildActivitiesCarousel() {
+  // Sort activities by popularity (descending) and take top 5
+ final topActivities = (_activities
+  .where((activity) => activity.popularity != null)
+  .toList()
+  ..sort((a, b) => (b.popularity ?? 0).compareTo(a.popularity ?? 0)))
+  .take(5)
+  .toList();
 
-  Widget _buildActivitiesCarousel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Aktivitäten für heute',
-                style: GoogleFonts.montserrat(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF534E4E),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Top Aktivitäten',
+              style: GoogleFonts.montserrat(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF534E4E),
+              ),
+            ),
+            if (_isLoadingActivities)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF0071BC),
                 ),
               ),
-              if (_isLoadingActivities)
-                const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFF0071BC),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+      
+      if (_activitiesError.isNotEmpty)
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _activitiesError,
+                  style: GoogleFonts.montserrat(
+                    fontSize: 14,
+                    color: Colors.grey[600],
                   ),
                 ),
-            ],
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _loadActivities,
+                  child: Text(
+                    'Erneut versuchen',
+                    style: GoogleFonts.montserrat(
+                      color: const Color(0xFF0071BC),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        )
+      else if (topActivities.isEmpty && !_isLoadingActivities)
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.local_activity,
+                  size: 48,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Keine Aktivitäten gefunden',
+                  style: GoogleFonts.montserrat(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        )
+      else
+        SizedBox(
+          height: 200,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            itemCount: topActivities.length,
+            itemBuilder: (context, index) {
+              final activity = topActivities[index];
+              return Container(
+                width: 300,
+                margin: const EdgeInsets.only(right: 16),
+                child: _buildActivityCard(activity),
+              );
+            },
           ),
         ),
-        const SizedBox(height: 16),
-        
-        if (_activitiesError.isNotEmpty)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 48,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _activitiesError,
-                    style: GoogleFonts.montserrat(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _loadActivities,
-                    child: Text(
-                      'Erneut versuchen',
-                      style: GoogleFonts.montserrat(
-                        color: const Color(0xFF0071BC),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else if (_activities.isEmpty && !_isLoadingActivities)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.local_activity,
-                    size: 48,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Keine Aktivitäten gefunden',
-                    style: GoogleFonts.montserrat(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else
-          SizedBox(
-            height: 200,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              itemCount: _activities.length,
-              itemBuilder: (context, index) {
-                final activity = _activities[index];
-                return Container(
-                  width: 300,
-                  margin: const EdgeInsets.only(right: 16),
-                  child: _buildActivityCard(activity),
-                );
-              },
-            ),
-          ),
-      ],
-    );
-  }
+    ],
+  );
+}
 
   Widget _buildActivityCard(Activity activity) {
      return GestureDetector(
