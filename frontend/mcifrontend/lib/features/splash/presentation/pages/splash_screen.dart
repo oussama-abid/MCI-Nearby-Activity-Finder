@@ -3,7 +3,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:lottie/lottie.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:mcifrontend/features/main/presentation/pages/main_screen.dart'; // Your home page import
+// Change this import to point to your DayventureApp
+import 'package:mcifrontend/app.dart'; // This should contain your DayventureApp
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -82,12 +83,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       Future.delayed(const Duration(milliseconds: 1100), () {
         _subtitleFadeSlideController.forward();
 
-        // Step 3: After subtitle animation, wait and navigate to HomePage
+        // Step 3: After subtitle animation, wait and navigate to DayventureApp
         Future.delayed(const Duration(milliseconds: 2200), () {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-           builder: (_) => const MainScreen(),
-
+              builder: (_) => DayventureApp(), // Changed to DayventureApp
             ),
           );
         });

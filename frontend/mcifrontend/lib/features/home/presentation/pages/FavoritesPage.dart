@@ -56,7 +56,6 @@ class _FavoritesPageState extends State<FavoritesPage> {
     });
   }
 
-
   @override
   Widget build(BuildContext context) {
     if (filteredActivitiesGlobal.isEmpty) {
@@ -84,7 +83,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
             : LatLng(0, 0);
 
         if (lat == null || lng == null) {
-          print("Activité sans coordonnées valides : \${activity['name']}");
+          print("Activité sans coordonnées valides : ${activity['name']}");
         }
 
         return GestureDetector(
@@ -97,11 +96,14 @@ class _FavoritesPageState extends State<FavoritesPage> {
                   title: activity['name'] ?? 'Nom inconnu',
                   location: activity['location'] ?? 'Emplacement inconnu',
                   weather: activity['weather'] ?? 'clear',
-                  temperature: (activity['weather'] ?? 'clear').toString().split(',')[0],
-                  duration: activity['duration'] ?? '1h',
-                  distance: activity['distance'] ?? '–',
+                  temperature: _parseTemperature(activity['weather']),
                   userLocation: LatLng(53.0793, 8.8017),
                   destinationLocation: destination,
+                  // Optional parameters from database if available
+                  openingHours: activity['opening_hours'],
+                  website: activity['website'],
+                  contact: activity['contact'],
+                  wikipedia: activity['wikipedia'],
                 ),
               ),
             );
@@ -158,11 +160,11 @@ class _FavoritesPageState extends State<FavoritesPage> {
                         children: [
                           Icon(Icons.schedule, size: 18, color: Colors.blueAccent),
                           SizedBox(width: 6),
-                          Text(activity['duration'] ?? '–'),
+                          Text('Calcul en cours...'), // Will be calculated in detail page
                           Spacer(),
                           Icon(Icons.place, size: 18, color: Colors.redAccent),
                           SizedBox(width: 6),
-                          Text(activity['distance'] ?? '–'),
+                          Text('Calcul en cours...'), // Will be calculated in detail page
                         ],
                       ),
                     ],
@@ -174,5 +176,19 @@ class _FavoritesPageState extends State<FavoritesPage> {
         );
       },
     );
+  }
+
+  String _parseTemperature(dynamic weather) {
+    if (weather == null) return '20°C';
+    
+    String weatherStr = weather.toString();
+    
+    // If it's already a temperature format (like "25°C")
+    if (weatherStr.contains('°')) {
+      return weatherStr;
+    }
+    
+    // If it's a weather condition, provide a default temperature
+    return '20°C';
   }
 }
