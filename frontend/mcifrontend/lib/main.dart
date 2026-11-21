@@ -15,8 +15,8 @@ import 'l10n/generated/app_localizations.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
-    url: 'REMOVED',        // remplace par ton URL
-    anonKey: 'REMOVED',                    // remplace par ta clé
+    url: const String.fromEnvironment('SUPABASE_URL'), // passed with --dart-define
+    anonKey: const String.fromEnvironment('SUPABASE_ANON_KEY'),
   );
   final prefs = await SharedPreferences.getInstance();
   prefs.setString('test', 'hello');
