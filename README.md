@@ -1,6 +1,6 @@
-# MCI: Nearby Activity Finder
+# Dayventure: Nearby Activity Finder
 
-A mobile app that suggests leisure activities near you, based on your
+Dayventure is a mobile app that suggests leisure activities near you, based on your
 location, the current weather and who you are with.
 
 University team project at Hochschule Bremen, summer semester 2025,
